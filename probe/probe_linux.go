@@ -2,6 +2,7 @@ package probe
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -63,7 +64,7 @@ func Send(ctx context.Context, to net.IP, port int, ttl int) (Result, error) {
 		buf := make([]byte, 1500)
 		oob := make([]byte, 1500)
 		_, oobn, _, _, err := unix.Recvmsg(int(fd), buf, oob, unix.MSG_ERRQUEUE)
-		if err == unix.EAGAIN {
+		if errors.Is(err, unix.EAGAIN) {
 			return false
 		}
 		if err != nil {
@@ -138,6 +139,8 @@ func parse(oob []byte) (net.IP, error) {
 	}
 
 	for _, message := range messages {
+		fmt.Printf("Got message len=%d level=%d type=%d\n%x\n", message.Header.Len, message.Header.Level, message.Header.Type, message.Data)
+
 		if message.Header.Type != unix.IP_RECVERR {
 			continue
 		}
