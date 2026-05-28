@@ -53,7 +53,7 @@ func Send(ctx context.Context, to net.IP, port int, ttl int) (Result, error) {
 		return Result{}, err
 	}
 	if sendErr != nil {
-		return Result{}, err
+		return Result{}, sendErr
 	}
 
 	res := Result{
@@ -89,7 +89,7 @@ func Send(ctx context.Context, to net.IP, port int, ttl int) (Result, error) {
 		return Result{}, err
 	}
 	if readErr != nil {
-		return Result{}, err
+		return Result{}, readErr
 	}
 
 	return res, nil
@@ -171,6 +171,9 @@ func parseSockExtendedErr(data []byte) (net.IP, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	fmt.Printf("SockEE errno=%d origin=%d type=%d code=%d info=%d data=%d\n",
+		see.Errno, see.Origin, see.Type, see.Code, see.Info, see.Data)
 
 	switch see.Origin {
 	case unix.SO_EE_ORIGIN_ICMP:
