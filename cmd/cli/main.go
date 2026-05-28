@@ -45,9 +45,11 @@ func main() {
 		defer cancel()
 
 		fmt.Printf("%v %v %v\n", ips[idx], *port, i)
-		_, err := probe.Send(ctx, ips[idx], *port, i)
+		hop, err := probe.Send(ctx, ips[idx], *port, i)
 		if err != nil {
 			fmt.Printf("failed sending probe: %s\n", err.Error())
+		} else {
+			fmt.Printf("hop result: %+v\n", hop)
 		}
 	}
 }
