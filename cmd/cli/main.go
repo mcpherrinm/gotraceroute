@@ -15,7 +15,7 @@ func main() {
 	ipv4Flag := flag.Bool("4", false, "Use IPv4")
 	ipv6Flag := flag.Bool("6", false, "Use IPv6")
 	maxTTLFlag := flag.Int("m", 30, "Max TTL")
-	port := flag.Int("P", 9000, "UDP target port")
+	port := flag.Int("p", 9000, "UDP target port")
 
 	flag.Parse()
 
