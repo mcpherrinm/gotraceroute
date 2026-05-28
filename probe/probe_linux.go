@@ -1,7 +1,9 @@
 package probe
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"net"
@@ -141,11 +143,53 @@ func parse(oob []byte) (net.IP, error) {
 	for _, message := range messages {
 		fmt.Printf("Got message len=%d level=%d type=%d\n%x\n", message.Header.Len, message.Header.Level, message.Header.Type, message.Data)
 
-		if message.Header.Type != unix.IP_RECVERR {
+		if message.Header.Level != unix.IPPROTO_IP || message.Header.Type != unix.IP_RECVERR {
+			// I'm not sure if we should get anything else, so log them.
+			fmt.Printf("Got unexpected message len=%d level=%d type=%d\n%x\n", message.Header.Len, message.Header.Level, message.Header.Type, message.Data)
 			continue
 		}
-		// TODO: we need to parse something out here
-		return net.IP{1, 2, 3, 4}, nil
+
+		return parseSockExtendedErr(message.Data)
 	}
-	return net.IP{4, 3, 3, 4}, nil
+
+	return nil, fmt.Errorf("no IP address found")
+}
+
+const sockExtendedErrSize = 16
+
+// parseSockExtendedErr parses the entry from MSG_ERRQUEUE
+// man 2 recv defines the structure
+func parseSockExtendedErr(data []byte) (net.IP, error) {
+	if len(data) < sockExtendedErrSize {
+		return nil, fmt.Errorf("sockExtendedErr too short: length %d < expected %d", len(data), sockExtendedErrSize)
+	}
+
+	var see unix.SockExtendedErr
+
+	rd := bytes.NewReader(data)
+	err := binary.Read(rd, binary.NativeEndian, &see)
+	if err != nil {
+		return nil, err
+	}
+
+	switch see.Origin {
+	case unix.SO_EE_ORIGIN_ICMP:
+		var in unix.RawSockaddrInet4
+		err = binary.Read(rd, binary.NativeEndian, &in)
+		if err != nil {
+			return nil, err
+		}
+		return net.IPv4(in.Addr[0], in.Addr[1], in.Addr[2], in.Addr[3]), nil
+	case unix.SO_EE_ORIGIN_ICMP6:
+		var in6 unix.RawSockaddrInet6
+		err = binary.Read(rd, binary.NativeEndian, &in6)
+		if err != nil {
+			return nil, err
+		}
+		ip := make(net.IP, net.IPv6len)
+		copy(ip, in6.Addr[:])
+		return ip, nil
+	default:
+		return nil, fmt.Errorf("unknown origin %d", see.Origin)
+	}
 }
