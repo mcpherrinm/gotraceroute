@@ -1,3 +1,5 @@
+// Package probe implements the platform-specific logic of sending out network
+// requests and getting their responses.
 package probe
 
 import (
@@ -21,6 +23,7 @@ type Result struct {
 	RTT time.Duration
 }
 
+// Send a single probe, waiting for its response
 func Send(ctx context.Context, to net.IP, port int, ttl int) (Result, error) {
 	file, err := sock(ttl)
 	if err != nil {
@@ -40,7 +43,10 @@ func Send(ctx context.Context, to net.IP, port int, ttl int) (Result, error) {
 
 	deadline, ok := ctx.Deadline()
 	if ok {
-		file.SetReadDeadline(deadline)
+		err = file.SetReadDeadline(deadline)
+		if err != nil {
+			return Result{}, err
+		}
 	}
 
 	start := time.Now()
@@ -128,7 +134,7 @@ func sock(ttl int) (*os.File, error) {
 	err = unix.SetsockoptInt(fd, unix.IPPROTO_IP, unix.IP_TTL, ttl)
 	if err != nil {
 		unix.Close(fd)
-		return nil, fmt.Errorf("Setting TTL: %w", err)
+		return nil, fmt.Errorf("setting TTL: %w", err)
 	}
 
 	return os.NewFile(uintptr(fd), "probe"), nil

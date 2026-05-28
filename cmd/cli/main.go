@@ -1,3 +1,4 @@
+// Package main is a traceroute CLI
 package main
 
 import (
