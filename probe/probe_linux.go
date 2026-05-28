@@ -25,13 +25,24 @@ func Send(ctx context.Context, to net.IP, port int, ttl int) (Result, error) {
 	}
 	defer file.Close()
 
+	sc, err := file.SyscallConn()
+	if err != nil {
+		return Result{}, err
+	}
+
 	sa, err := sockaddr(to, port)
 	if err != nil {
 		return Result{}, err
 	}
 
-	err = unix.Sendto(int(file.Fd()), []byte("ping"), 0, sa)
+	var sendErr error
+	err = sc.Control(func(fd uintptr) {
+		sendErr = unix.Sendto(int(fd), []byte("ping"), 0, sa)
+	})
 	if err != nil {
+		return Result{}, err
+	}
+	if sendErr != nil {
 		return Result{}, err
 	}
 
