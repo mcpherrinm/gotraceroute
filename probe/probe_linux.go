@@ -35,6 +35,11 @@ func Send(ctx context.Context, to net.IP, port int, ttl int) (Result, error) {
 		return Result{}, err
 	}
 
+	deadline, ok := ctx.Deadline()
+	if ok {
+		file.SetReadDeadline(deadline)
+	}
+
 	var sendErr error
 	err = sc.Control(func(fd uintptr) {
 		sendErr = unix.Sendto(int(fd), []byte("ping"), 0, sa)

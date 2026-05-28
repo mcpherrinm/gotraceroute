@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"slices"
+	"time"
 
 	"github.com/mcpherrinm/gotraceroute/probe"
 )
@@ -39,9 +40,12 @@ func main() {
 		return
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
 	for i := 1; i <= *maxTTLFlag; i++ {
 		fmt.Printf("%v %v %v\n", ips[idx], *port, i)
-		_, err := probe.Send(context.Background(), ips[idx], *port, i)
+		_, err := probe.Send(ctx, ips[idx], *port, i)
 		if err != nil {
 			fmt.Printf("failed sending probe: %s\n", err.Error())
 		}
