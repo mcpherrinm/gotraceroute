@@ -37,7 +37,7 @@ func main() {
 		return
 	}
 
-	for i := 1; i<*maxTTLFlag; i++ {
+	for i := 1; i <= *maxTTLFlag; i++ {
 		fmt.Printf("%v %v %v\n", ips[0], *port, i)
 		_, err := probe.Send(context.Background(), ips[0], *port, i)
 		if err != nil {
