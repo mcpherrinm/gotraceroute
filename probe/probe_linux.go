@@ -19,7 +19,7 @@ type Result struct {
 }
 
 func Send(ctx context.Context, to net.IP, port int, ttl int) (Result, error) {
-	fd, file, err := sock(ttl)
+	file, err := sock(ttl)
 	if err != nil {
 		return Result{}, err
 	}
@@ -30,7 +30,7 @@ func Send(ctx context.Context, to net.IP, port int, ttl int) (Result, error) {
 		return Result{}, err
 	}
 
-	err = unix.Sendto(fd, []byte("ping"), 0, sa)
+	err = unix.Sendto(int(file.Fd()), []byte("ping"), 0, sa)
 	if err != nil {
 		return Result{}, err
 	}
@@ -53,26 +53,26 @@ func sockaddr(to net.IP, port int) (unix.Sockaddr, error) {
 	return &addr, nil
 }
 
-// sock returns an FD and os.File set up to use with the ttl
-func sock(ttl int) (int, *os.File, error) {
+// sock returns an os.File set up to use with the ttl
+func sock(ttl int) (*os.File, error) {
 	fd, err := unix.Socket(unix.AF_INET, unix.SOCK_DGRAM|unix.SOCK_NONBLOCK, unix.IPPROTO_UDP)
 	if err != nil {
-		return 0, nil, fmt.Errorf("probe socket: %w", err)
+		return nil, fmt.Errorf("probe socket: %w", err)
 	}
 
 	// Set IP_RECVERR so we get back our TTL errors
 	err = unix.SetsockoptInt(fd, unix.IPPROTO_IP, unix.IP_RECVERR, 1)
 	if err != nil {
 		unix.Close(fd)
-		return 0, nil, fmt.Errorf("setting IP_RECVERR: %w", err)
+		return nil, fmt.Errorf("setting IP_RECVERR: %w", err)
 	}
 
 	// Set the TTL
 	err = unix.SetsockoptInt(fd, unix.IPPROTO_IP, unix.IP_TTL, ttl)
 	if err != nil {
 		unix.Close(fd)
-		return 0, nil, fmt.Errorf("Setting TTL: %w", err)
+		return nil, fmt.Errorf("Setting TTL: %w", err)
 	}
 
-	return fd, os.NewFile(uintptr(fd), "probe"), nil
+	return os.NewFile(uintptr(fd), "probe"), nil
 }

@@ -29,16 +29,19 @@ func main() {
 
 	ips, err := net.LookupIP(destination)
 	if err != nil {
-		fmt.Printf("failed looking up %q: %s", destination, err.Error())
+		fmt.Printf("failed looking up %q: %s\n", destination, err.Error())
 		return
 	}
 	if len(ips) == 0 {
-		fmt.Printf("failed looking up %q: no IPs", destination)
+		fmt.Printf("failed looking up %q: no IPs\n", destination)
 		return
 	}
 
 	for i := 1; i<*maxTTLFlag; i++ {
 		fmt.Printf("%v %v %v\n", ips[0], *port, i)
-		probe.Send(context.Background(), ips[0], *port, i)
+		_, err := probe.Send(context.Background(), ips[0], *port, i)
+		if err != nil {
+			fmt.Printf("failed sending probe: %s\n", err.Error())
+		}
 	}
 }
