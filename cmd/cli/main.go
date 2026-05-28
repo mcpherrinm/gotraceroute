@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"slices"
 
 	"github.com/mcpherrinm/gotraceroute/probe"
 )
@@ -32,14 +33,15 @@ func main() {
 		fmt.Printf("failed looking up %q: %s\n", destination, err.Error())
 		return
 	}
-	if len(ips) == 0 {
-		fmt.Printf("failed looking up %q: no IPs\n", destination)
+	idx := slices.IndexFunc(ips, func(ip net.IP) bool { return ip.To4() != nil })
+	if idx == -1 {
+		fmt.Printf("failed looking up %q: no IPv4 address\n", destination)
 		return
 	}
 
 	for i := 1; i <= *maxTTLFlag; i++ {
-		fmt.Printf("%v %v %v\n", ips[0], *port, i)
-		_, err := probe.Send(context.Background(), ips[0], *port, i)
+		fmt.Printf("%v %v %v\n", ips[idx], *port, i)
+		_, err := probe.Send(context.Background(), ips[idx], *port, i)
 		if err != nil {
 			fmt.Printf("failed sending probe: %s\n", err.Error())
 		}
