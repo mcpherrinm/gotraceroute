@@ -40,10 +40,10 @@ func main() {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-
 	for i := 1; i <= *maxTTLFlag; i++ {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+
 		fmt.Printf("%v %v %v\n", ips[idx], *port, i)
 		_, err := probe.Send(ctx, ips[idx], *port, i)
 		if err != nil {

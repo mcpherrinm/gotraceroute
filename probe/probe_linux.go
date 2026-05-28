@@ -40,6 +40,8 @@ func Send(ctx context.Context, to net.IP, port int, ttl int) (Result, error) {
 		file.SetReadDeadline(deadline)
 	}
 
+	start := time.Now()
+
 	var sendErr error
 	err = sc.Control(func(fd uintptr) {
 		sendErr = unix.Sendto(int(fd), []byte("ping"), 0, sa)
@@ -51,7 +53,43 @@ func Send(ctx context.Context, to net.IP, port int, ttl int) (Result, error) {
 		return Result{}, err
 	}
 
-	return Result{}, fmt.Errorf("todo: %v", sa)
+	res := Result{
+		To:  to,
+		TTL: ttl,
+	}
+
+	var readErr error
+	err = sc.Read(func(fd uintptr) bool {
+		buf := make([]byte, 1500)
+		oob := make([]byte, 1500)
+		_, oobn, _, _, err := unix.Recvmsg(int(fd), buf, oob, unix.MSG_ERRQUEUE)
+		if err == unix.EAGAIN {
+			return false
+		}
+		if err != nil {
+			readErr = err
+			return true
+		}
+
+		res.RTT = time.Since(start)
+
+		hop, err := parse(oob[:oobn])
+		if err != nil {
+			readErr = err
+			return true
+		}
+
+		res.Hop = hop
+		return true
+	})
+	if err != nil {
+		return Result{}, err
+	}
+	if readErr != nil {
+		return Result{}, err
+	}
+
+	return res, nil
 }
 
 // sockaddr returns a unix.Sockaddr for (to, port)
@@ -91,4 +129,20 @@ func sock(ttl int) (*os.File, error) {
 	}
 
 	return os.NewFile(uintptr(fd), "probe"), nil
+}
+
+func parse(oob []byte) (net.IP, error) {
+	messages, err := unix.ParseSocketControlMessage(oob)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, message := range messages {
+		if message.Header.Type != unix.IP_RECVERR {
+			continue
+		}
+		// TODO: we need to parse something out here
+		return net.IP{1, 2, 3, 4}, nil
+	}
+	return net.IP{4, 3, 3, 4}, nil
 }
