@@ -84,5 +84,9 @@ func main() {
 		}
 
 		fmt.Printf("%3d %s (%s) %s\n", i, name, hop.Hop, hop.RTT)
+
+		if hop.Hop.Equal(ip) {
+			return
+		}
 	}
 }
