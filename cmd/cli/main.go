@@ -28,29 +28,61 @@ func main() {
 
 	destination := flag.Args()[0]
 
-	fmt.Printf("ipv4=%v ipv6=%v max_ttl=%v port=%v destination=%v\n", *ipv4Flag, *ipv6Flag, *maxTTLFlag, *port, destination)
+	if *ipv4Flag && *ipv6Flag {
+		fmt.Printf("Both -4 and -6 specified: Pick one")
+		return
+	}
 
 	ips, err := net.LookupIP(destination)
 	if err != nil {
 		fmt.Printf("failed looking up %q: %s\n", destination, err.Error())
 		return
 	}
-	idx := slices.IndexFunc(ips, func(ip net.IP) bool { return ip.To4() != nil })
-	if idx == -1 {
-		fmt.Printf("failed looking up %q: no IPv4 address\n", destination)
+	if len(ips) == 0 {
+		fmt.Printf("failed looking up %q: no IPs\n", destination)
 		return
 	}
+
+	var ip net.IP
+	if *ipv4Flag {
+		idx := slices.IndexFunc(ips, func(ip net.IP) bool { return ip.To4() != nil })
+		if idx == -1 {
+			fmt.Printf("failed looking up %q: no IPv4 address\n", destination)
+			return
+		}
+		ip = ips[idx]
+	}
+
+	if *ipv6Flag {
+		idx := slices.IndexFunc(ips, func(ip net.IP) bool { return ip.To4() == nil })
+		if idx == -1 {
+			fmt.Printf("failed looking up %q: no IPv6 address\n", destination)
+			return
+		}
+		ip = ips[idx]
+	}
+	if !*ipv4Flag && !*ipv6Flag {
+		ip = ips[0]
+	}
+
 
 	for i := 1; i <= *maxTTLFlag; i++ {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
 
-		fmt.Printf("%v %v %v\n", ips[idx], *port, i)
-		hop, err := probe.Send(ctx, ips[idx], *port, i)
+		hop, err := probe.Send(ctx, ip, *port, i)
 		if err != nil {
-			fmt.Printf("failed sending probe: %s\n", err.Error())
-		} else {
-			fmt.Printf("hop result: %+v\n", hop)
+			fmt.Printf("failed probe: %s\n", err.Error())
+			continue
 		}
+		var name string
+		names, err := net.LookupAddr(hop.Hop.String())
+		if err != nil || len(names) == 0 {
+			name = hop.Hop.String()
+		} else {
+			name = names[0]
+		}
+
+		fmt.Printf("%3d %s (%s) %s\n", i, name, hop.Hop, hop.RTT)
 	}
 }

@@ -147,8 +147,6 @@ func parse(oob []byte) (net.IP, error) {
 	}
 
 	for _, message := range messages {
-		fmt.Printf("Got message len=%d level=%d type=%d\n%x\n", message.Header.Len, message.Header.Level, message.Header.Type, message.Data)
-
 		if message.Header.Level != unix.IPPROTO_IP || message.Header.Type != unix.IP_RECVERR {
 			// I'm not sure if we should get anything else, so log them.
 			fmt.Printf("Got unexpected message len=%d level=%d type=%d\n%x\n", message.Header.Len, message.Header.Level, message.Header.Type, message.Data)
@@ -177,9 +175,6 @@ func parseSockExtendedErr(data []byte) (net.IP, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	fmt.Printf("SockEE errno=%d origin=%d type=%d code=%d info=%d data=%d\n",
-		see.Errno, see.Origin, see.Type, see.Code, see.Info, see.Data)
 
 	switch see.Origin {
 	case unix.SO_EE_ORIGIN_ICMP:
