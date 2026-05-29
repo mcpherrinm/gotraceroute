@@ -1,5 +1,3 @@
-// Package probe implements the platform-specific logic of sending out network
-// requests and getting their responses.
 package probe
 
 import (
@@ -15,16 +13,8 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// Result of a probe
-type Result struct {
-	To  net.IP
-	Hop net.IP
-	TTL int
-	RTT time.Duration
-}
-
-// Send a single probe, waiting for its response
-func Send(ctx context.Context, to net.IP, port int, ttl int) (Result, error) {
+// UDP sends a single UDP probe, then waiting for its response
+func UDP(ctx context.Context, to net.IP, port int, ttl int) (Result, error) {
 	file, err := sock(ttl)
 	if err != nil {
 		return Result{}, err

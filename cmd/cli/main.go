@@ -65,12 +65,11 @@ func main() {
 		ip = ips[0]
 	}
 
-
 	for i := 1; i <= *maxTTLFlag; i++ {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
 
-		hop, err := probe.Send(ctx, ip, *port, i)
+		hop, err := probe.UDP(ctx, ip, *port, i)
 		if err != nil {
 			fmt.Printf("failed probe: %s\n", err.Error())
 			continue
