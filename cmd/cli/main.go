@@ -26,43 +26,10 @@ func main() {
 		return
 	}
 
-	destination := flag.Args()[0]
-
-	if *ipv4Flag && *ipv6Flag {
-		fmt.Printf("Both -4 and -6 specified: Pick one")
-		return
-	}
-
-	ips, err := net.LookupIP(destination)
+	ip, err := getIP(*ipv4Flag, *ipv6Flag, flag.Args()[0])
 	if err != nil {
-		fmt.Printf("failed looking up %q: %s\n", destination, err.Error())
+		fmt.Println(err)
 		return
-	}
-	if len(ips) == 0 {
-		fmt.Printf("failed looking up %q: no IPs\n", destination)
-		return
-	}
-
-	var ip net.IP
-	if *ipv4Flag {
-		idx := slices.IndexFunc(ips, func(ip net.IP) bool { return ip.To4() != nil })
-		if idx == -1 {
-			fmt.Printf("failed looking up %q: no IPv4 address\n", destination)
-			return
-		}
-		ip = ips[idx]
-	}
-
-	if *ipv6Flag {
-		idx := slices.IndexFunc(ips, func(ip net.IP) bool { return ip.To4() == nil })
-		if idx == -1 {
-			fmt.Printf("failed looking up %q: no IPv6 address\n", destination)
-			return
-		}
-		ip = ips[idx]
-	}
-	if !*ipv4Flag && !*ipv6Flag {
-		ip = ips[0]
 	}
 
 	for i := 1; i <= *maxTTLFlag; i++ {
@@ -88,4 +55,41 @@ func main() {
 			return
 		}
 	}
+}
+
+func getIP(ipv4 bool, ipv6 bool, destination string) (net.IP, error) {
+	if ipv4 && ipv6 {
+		return nil, fmt.Errorf("both -4 and -6 specified")
+	}
+
+	ips, err := net.LookupIP(destination)
+	if err != nil {
+		return nil, fmt.Errorf("failed looking up %q: %w", destination, err)
+	}
+	if len(ips) == 0 {
+		return nil, fmt.Errorf("failed looking up %q: no IPs", destination)
+	}
+
+	var ip net.IP
+	if ipv4 {
+		idx := slices.IndexFunc(ips, func(ip net.IP) bool { return ip.To4() != nil })
+		if idx == -1 {
+			return nil, fmt.Errorf("failed looking up %q: no IPv4 address", destination)
+		}
+		ip = ips[idx]
+	}
+
+	if ipv6 {
+		idx := slices.IndexFunc(ips, func(ip net.IP) bool { return ip.To4() == nil })
+		if idx == -1 {
+			return nil, fmt.Errorf("failed looking up %q: no IPv6 address", destination)
+		}
+		ip = ips[idx]
+	}
+
+	if !ipv4 && !ipv6 {
+		ip = ips[0]
+	}
+
+	return ip, nil
 }
