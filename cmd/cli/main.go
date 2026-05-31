@@ -38,7 +38,7 @@ func main() {
 
 		hop, err := probe.UDP(ctx, ip, *port, i)
 		if err != nil {
-			fmt.Printf("failed probe: %s\n", err.Error())
+			fmt.Printf("%3d failed probe: %s\n", i, err.Error())
 			continue
 		}
 		var name string
