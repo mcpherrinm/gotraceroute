@@ -105,7 +105,7 @@ func main() {
 		d := reply(buf[:n], hopsV4)
 		if d != nil {
 			log.Printf("replying %x", d)
-			tun.Write(d)
+			_, _ = tun.Write(d)
 		}
 	}
 }
