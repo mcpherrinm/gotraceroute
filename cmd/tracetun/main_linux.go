@@ -4,6 +4,7 @@ package main
 
 import (
 	"log"
+	"net"
 	"os"
 
 	"golang.org/x/sys/unix"
@@ -34,6 +35,22 @@ func tun(netName string) (*os.File, error) {
 	return os.NewFile(uintptr(fd), "/dev/net/tun"), nil
 }
 
+func reply(in []byte, base net.IP) []byte {
+	// Ignore non-IPv4
+	if len(in) < 20 || in[0]>>4 != 4 {
+		return nil
+	}
+
+	ttl := in[8]
+	from := in[12:16]
+
+	// TODO do hop offsets better
+	replySrc := base.To4()
+	replySrc[3] += ttl
+
+	return icmpTimeExceeded(replySrc, from, in)
+}
+
 func main() {
 	tun, err := tun("tun0")
 	if err != nil {
@@ -47,8 +64,11 @@ func main() {
 			continue
 		}
 
-		// Parse `buf[:n]` to figure out the TTL and port
-		// tun.Write(something)
 		log.Printf("got a message: %x", buf[:n])
+		d := reply(buf[:n], net.IPv4(10, 100, 0, 2))
+		if d != nil {
+			log.Printf("replying %x", d)
+			tun.Write(d)
+		}
 	}
 }
