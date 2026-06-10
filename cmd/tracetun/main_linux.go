@@ -65,10 +65,10 @@ func main() {
 		}
 
 		log.Printf("got a message: %x", buf[:n])
-		d := reply(buf[:n], net.IPv4(162, 252, 205, 130))
+		d := reply(buf[:n], net.IPv4(10, 100, 0, 2))
 		if d != nil {
 			log.Printf("replying %x", d)
-			_, _ := tun.Write(d)
+			tun.Write(d)
 		}
 	}
 }
