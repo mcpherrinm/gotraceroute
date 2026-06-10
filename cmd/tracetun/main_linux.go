@@ -53,10 +53,10 @@ func reply(in []byte, hops map[int]net.IP) []byte {
 	return icmpTimeExceeded(replySrc, from, in)
 }
 
-// Config is loaded as JSON with the IPs to reply from
-// Hops maps ttl -> IP
-// Entries not present in the map will not reply
+// Config defines the JSON structure of the config file.
 type Config struct {
+	// HopsV4 is a map of TTL to IPv4 address to reply from
+	// Missing keys won't reply.
 	HopsV4 map[int]string
 
 	// TODO: HopsV6
