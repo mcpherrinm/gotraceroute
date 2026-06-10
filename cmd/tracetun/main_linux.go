@@ -3,6 +3,7 @@
 package main
 
 import (
+	"encoding/json"
 	"log"
 	"net"
 	"os"
@@ -35,7 +36,7 @@ func tun(netName string) (*os.File, error) {
 	return os.NewFile(uintptr(fd), "/dev/net/tun"), nil
 }
 
-func reply(in []byte, base net.IP) []byte {
+func reply(in []byte, hops map[int]net.IP) []byte {
 	// Ignore non-IPv4
 	if len(in) < 20 || in[0]>>4 != 4 {
 		return nil
@@ -44,17 +45,53 @@ func reply(in []byte, base net.IP) []byte {
 	ttl := in[8]
 	from := in[12:16]
 
-	// TODO do hop offsets better
-	replySrc := base.To4()
-	replySrc[3] += ttl
+	replySrc, ok := hops[int(ttl)]
+	if !ok {
+		return nil
+	}
 
 	return icmpTimeExceeded(replySrc, from, in)
 }
 
+// Config is loaded as JSON with the IPs to reply from
+// Hops maps ttl -> IP
+// Entries not present in the map will not reply
+type Config struct {
+	HopsV4 map[int]string
+
+	// TODO: HopsV6
+}
+
 func main() {
-	tun, err := tun("tun0")
+	if len(os.Args) < 3 {
+		log.Fatal("usage: tracetun <interface> <config.json>")
+	}
+
+	cfgFile, err := os.ReadFile(os.Args[2])
+	if err != nil {
+		log.Fatalf("opening config file: %v", err)
+	}
+
+	cfg := Config{}
+	err = json.Unmarshal(cfgFile, &cfg)
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	hopsV4 := make(map[int]net.IP)
+	for hop, ipv4 := range cfg.HopsV4 {
+		parsed := net.ParseIP(ipv4)
+		if parsed == nil || parsed.To4() == nil {
+			log.Fatalf("invalid ipv4 address: hop %d ip %s", hop, ipv4)
+		}
+		hopsV4[hop] = parsed.To4()
+	}
+
+	log.Printf("loaded hops: %v", hopsV4)
+
+	tun, err := tun(os.Args[1])
+	if err != nil {
+		log.Fatalf("opening tun device: %v", err)
 	}
 
 	buf := make([]byte, 65535)
@@ -65,7 +102,7 @@ func main() {
 		}
 
 		log.Printf("got a message: %x", buf[:n])
-		d := reply(buf[:n], net.IPv4(10, 100, 0, 2))
+		d := reply(buf[:n], hopsV4)
 		if d != nil {
 			log.Printf("replying %x", d)
 			tun.Write(d)
