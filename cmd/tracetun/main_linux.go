@@ -38,7 +38,7 @@ func tun(netName string) (*os.File, error) {
 	return os.NewFile(uintptr(fd), "/dev/net/tun"), nil
 }
 
-func reply(in []byte, config map[netip.Addr]parsedConfig) []byte {
+func reply(in []byte, config map[netip.Addr]parsedConfig, debug bool) []byte {
 	// Ignore non-IPv4
 	if len(in) < 20 || in[0]>>4 != 4 {
 		return nil
@@ -50,16 +50,29 @@ func reply(in []byte, config map[netip.Addr]parsedConfig) []byte {
 
 	destConfig, ok := config[dest]
 	if !ok {
+		if debug {
+			log.Printf("packet to unknown destination %s", dest)
+		}
 		return nil
 	}
 
 	if ttl >= destConfig.DestinationTTL {
+		if debug {
+			log.Printf("Replying port unreachable dest: %s ttl: %d", dest, ttl)
+		}
 		return icmpMessage(dest, from, ipv4.ICMPTypeDestinationUnreachable, icmpPortUnreachable, in)
 	}
 
 	replySrc, ok := destConfig.hopsV4[int(ttl)]
 	if !ok {
+		if debug {
+			log.Printf("no reply for hop: %s ttl: %d", dest, ttl)
+		}
 		return nil
+	}
+
+	if debug {
+		log.Printf("replying TTL Exceeded from %s for dest: %s ttl: %d", replySrc, dest, ttl)
 	}
 
 	return icmpMessage(replySrc, from, ipv4.ICMPTypeTimeExceeded, icmpTTLExceeded, in)
@@ -154,15 +167,9 @@ func main() {
 			continue
 		}
 
-		d := reply(buf[:n], config)
+		d := reply(buf[:n], config, debug)
 		if d != nil {
-			if debug {
-				log.Printf("replying to message: %x", buf[:n])
-				log.Printf("               with: %x", d)
-			}
 			_, _ = tun.Write(d)
-		} else if debug {
-			log.Printf("not replying to: %x", buf[:n])
 		}
 	}
 }
