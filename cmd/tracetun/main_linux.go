@@ -53,7 +53,7 @@ func reply(in []byte, config map[netip.Addr]parsedConfig) []byte {
 		return nil
 	}
 
-	if ttl > destConfig.DestinationTTL {
+	if ttl >= destConfig.DestinationTTL {
 		return icmpMessage(dest, from, ipv4.ICMPTypeDestinationUnreachable, icmpPortUnreachable, in)
 	}
 
