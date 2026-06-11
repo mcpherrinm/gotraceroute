@@ -4,10 +4,12 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/netip"
 	"os"
 
+	"golang.org/x/net/ipv4"
 	"golang.org/x/sys/unix"
 )
 
@@ -36,7 +38,7 @@ func tun(netName string) (*os.File, error) {
 	return os.NewFile(uintptr(fd), "/dev/net/tun"), nil
 }
 
-func reply(in []byte, hops map[netip.Addr]map[int]netip.Addr) []byte {
+func reply(in []byte, config map[netip.Addr]parsedConfig) []byte {
 	// Ignore non-IPv4
 	if len(in) < 20 || in[0]>>4 != 4 {
 		return nil
@@ -46,23 +48,30 @@ func reply(in []byte, hops map[netip.Addr]map[int]netip.Addr) []byte {
 	from := netip.AddrFrom4([4]byte(in[12:16]))
 	dest := netip.AddrFrom4([4]byte(in[16:20]))
 
-	route, ok := hops[dest]
+	destConfig, ok := config[dest]
 	if !ok {
 		return nil
 	}
 
-	replySrc, ok := route[int(ttl)]
+	if ttl > destConfig.DestinationTTL {
+		return icmpMessage(dest, from, ipv4.ICMPTypeDestinationUnreachable, icmpPortUnreachable, in)
+	}
+
+	replySrc, ok := destConfig.hopsV4[int(ttl)]
 	if !ok {
 		return nil
 	}
 
-	return icmpTimeExceeded(replySrc, from, in)
+	return icmpMessage(replySrc, from, ipv4.ICMPTypeTimeExceeded, icmpTTLExceeded, in)
 }
 
 // Config defines the JSON structure of the config file.
 type Config struct {
 	// Destination IP address that traceroutes must be going to
 	Destination string
+
+	// DestinationTTL is the TTL to the destination.
+	DestinationTTL byte
 
 	// HopsV4 is a map of TTL to IPv4 address to reply from
 	// Missing keys won't reply.
@@ -71,41 +80,67 @@ type Config struct {
 	// TODO: HopsV6
 }
 
-func main() {
-	if len(os.Args) < 3 {
-		log.Fatal("usage: tracetun <interface> <config.json>")
-	}
+type parsedConfig struct {
+	Destination    netip.Addr
+	DestinationTTL byte
 
-	cfgFile, err := os.ReadFile(os.Args[2])
+	hopsV4 map[int]netip.Addr
+}
+
+func parseConfig(configFile string) (map[netip.Addr]parsedConfig, error) {
+	cfgFile, err := os.ReadFile(configFile)
 	if err != nil {
 		log.Fatalf("opening config file: %v", err)
 	}
 
-	cfgs := []Config{}
+	var cfgs []Config
 	err = json.Unmarshal(cfgFile, &cfgs)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	hopsV4 := make(map[netip.Addr]map[int]netip.Addr)
+	config := make(map[netip.Addr]parsedConfig)
 
 	for _, cfg := range cfgs {
 		dest, err := netip.ParseAddr(cfg.Destination)
 		if err != nil {
-			log.Fatalf("parsing traceroute destination address: %s", err)
+			return nil, fmt.Errorf("parsing traceroute destination address: %s", err)
 		}
 
-		hopsV4[dest] = make(map[int]netip.Addr)
-		for hop, ipv4 := range cfg.HopsV4 {
-			parsed, err := netip.ParseAddr(ipv4)
+		hopsV4 := make(map[int]netip.Addr)
+		for hop, ipv4hop := range cfg.HopsV4 {
+			parsed, err := netip.ParseAddr(ipv4hop)
 			if err != nil || !parsed.Is4() {
-				log.Fatalf("invalid ipv4 address: hop %d ip %s", hop, ipv4)
+				return nil, fmt.Errorf("invalid ipv4 address: hop %d ip %s", hop, ipv4hop)
 			}
-			hopsV4[dest][hop] = parsed
+			hopsV4[hop] = parsed
+		}
+
+		config[dest] = parsedConfig{
+			Destination:    dest,
+			DestinationTTL: cfg.DestinationTTL,
+			hopsV4:         hopsV4,
 		}
 	}
 
-	log.Printf("loaded hops: %v", hopsV4)
+	return config, nil
+}
+
+func main() {
+	if len(os.Args) < 3 {
+		log.Fatal("usage: tracetun <interface> <config.json>")
+	}
+
+	config, err := parseConfig(os.Args[2])
+	if err != nil {
+		return
+	}
+
+	var debug = os.Getenv("DEBUG") == "1"
+
+	if debug {
+		log.Printf("Loaded configuration: %+v", config)
+	}
 
 	tun, err := tun(os.Args[1])
 	if err != nil {
@@ -119,11 +154,15 @@ func main() {
 			continue
 		}
 
-		log.Printf("got a message: %x", buf[:n])
-		d := reply(buf[:n], hopsV4)
+		d := reply(buf[:n], config)
 		if d != nil {
-			log.Printf("replying %x", d)
+			if debug {
+				log.Printf("replying to message: %x", buf[:n])
+				log.Printf("               with: %x", d)
+			}
 			_, _ = tun.Write(d)
+		} else if debug {
+			log.Printf("not replying to: %x", buf[:n])
 		}
 	}
 }

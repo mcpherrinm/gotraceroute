@@ -5,7 +5,6 @@ import (
 	"net/netip"
 
 	"golang.org/x/net/icmp"
-	"golang.org/x/net/ipv4"
 )
 
 const (
@@ -13,14 +12,16 @@ const (
 	replyTTL      = 64
 	protoICMP     = 1
 	maxQuote      = 548
+	icmpTTLExceeded     = 0
+	icmpPortUnreachable = 3
 )
 
-func icmpTimeExceeded(src, dst netip.Addr, in []byte) []byte {
+func icmpMessage(src, dst netip.Addr, icmpType icmp.Type, icmpCode int, in []byte) []byte {
 	icmpBytes, err := (&icmp.Message{
-		Type: ipv4.ICMPTypeTimeExceeded,
-		Code: 0,
+		Type: icmpType, // ipv4.ICMPTypeTimeExceeded,
+		Code: icmpCode,
 		Body: &icmp.TimeExceeded{Data: in[:min(len(in), maxQuote)]},
-	}).Marshal(nil) // ICMP checksum computed and filled here
+	}).Marshal(nil)
 	if err != nil {
 		return nil
 	}
