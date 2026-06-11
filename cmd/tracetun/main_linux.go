@@ -5,7 +5,7 @@ package main
 import (
 	"encoding/json"
 	"log"
-	"net"
+	"net/netip"
 	"os"
 
 	"golang.org/x/sys/unix"
@@ -36,16 +36,22 @@ func tun(netName string) (*os.File, error) {
 	return os.NewFile(uintptr(fd), "/dev/net/tun"), nil
 }
 
-func reply(in []byte, hops map[int]net.IP) []byte {
+func reply(in []byte, hops map[netip.Addr]map[int]netip.Addr) []byte {
 	// Ignore non-IPv4
 	if len(in) < 20 || in[0]>>4 != 4 {
 		return nil
 	}
 
 	ttl := in[8]
-	from := in[12:16]
+	from := netip.AddrFrom4([4]byte(in[12:16]))
+	dest := netip.AddrFrom4([4]byte(in[16:20]))
 
-	replySrc, ok := hops[int(ttl)]
+	route, ok := hops[dest]
+	if !ok {
+		return nil
+	}
+
+	replySrc, ok := route[int(ttl)]
 	if !ok {
 		return nil
 	}
@@ -55,6 +61,9 @@ func reply(in []byte, hops map[int]net.IP) []byte {
 
 // Config defines the JSON structure of the config file.
 type Config struct {
+	// Destination IP address that traceroutes must be going to
+	Destination string
+
 	// HopsV4 is a map of TTL to IPv4 address to reply from
 	// Missing keys won't reply.
 	HopsV4 map[int]string
@@ -78,13 +87,19 @@ func main() {
 		log.Fatal(err)
 	}
 
-	hopsV4 := make(map[int]net.IP)
+	dest, err := netip.ParseAddr(cfg.Destination)
+	if err != nil {
+		log.Fatalf("parsing traceroute destination address: %s", err)
+	}
+
+	hopsV4 := make(map[netip.Addr]map[int]netip.Addr)
+	hopsV4[dest] = make(map[int]netip.Addr)
 	for hop, ipv4 := range cfg.HopsV4 {
-		parsed := net.ParseIP(ipv4)
-		if parsed == nil || parsed.To4() == nil {
+		parsed, err := netip.ParseAddr(ipv4)
+		if err != nil || !parsed.Is4() {
 			log.Fatalf("invalid ipv4 address: hop %d ip %s", hop, ipv4)
 		}
-		hopsV4[hop] = parsed.To4()
+		hopsV4[dest][hop] = parsed
 	}
 
 	log.Printf("loaded hops: %v", hopsV4)

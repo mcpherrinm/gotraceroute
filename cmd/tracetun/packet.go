@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/binary"
+	"net/netip"
 
 	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv4"
@@ -14,7 +15,7 @@ const (
 	maxQuote      = 548
 )
 
-func icmpTimeExceeded(src, dst, in []byte) []byte {
+func icmpTimeExceeded(src, dst netip.Addr, in []byte) []byte {
 	icmpBytes, err := (&icmp.Message{
 		Type: ipv4.ICMPTypeTimeExceeded,
 		Code: 0,
@@ -26,14 +27,14 @@ func icmpTimeExceeded(src, dst, in []byte) []byte {
 	return ipv4Packet(src, dst, protoICMP, icmpBytes)
 }
 
-func ipv4Packet(src, dst []byte, proto byte, payload []byte) []byte {
+func ipv4Packet(src, dst netip.Addr, proto byte, payload []byte) []byte {
 	pkt := make([]byte, ipv4HeaderLen+len(payload))
 	pkt[0] = 0x45 // version 4, IHL 5 words
 	binary.BigEndian.PutUint16(pkt[2:4], uint16(len(pkt)))
 	pkt[8] = replyTTL
 	pkt[9] = proto
-	copy(pkt[12:16], src)
-	copy(pkt[16:20], dst)
+	copy(pkt[12:16], src.AsSlice())
+	copy(pkt[16:20], dst.AsSlice())
 	binary.BigEndian.PutUint16(pkt[10:12], ipChecksum(pkt[:ipv4HeaderLen]))
 	copy(pkt[ipv4HeaderLen:], payload)
 	return pkt
