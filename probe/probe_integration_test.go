@@ -36,6 +36,8 @@ func TestProbeIntegration(t *testing.T) {
 	destIP := net.IPv4(10, 100, 0, 15)
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("ttl %d", test.ttl), func(t *testing.T) {
+			t.Parallel()
+
 			ctx, cancel := context.WithTimeout(t.Context(), time.Millisecond)
 			defer cancel()
 
