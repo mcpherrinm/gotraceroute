@@ -81,25 +81,28 @@ func main() {
 		log.Fatalf("opening config file: %v", err)
 	}
 
-	cfg := Config{}
-	err = json.Unmarshal(cfgFile, &cfg)
+	cfgs := []Config{}
+	err = json.Unmarshal(cfgFile, &cfgs)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	dest, err := netip.ParseAddr(cfg.Destination)
-	if err != nil {
-		log.Fatalf("parsing traceroute destination address: %s", err)
-	}
-
 	hopsV4 := make(map[netip.Addr]map[int]netip.Addr)
-	hopsV4[dest] = make(map[int]netip.Addr)
-	for hop, ipv4 := range cfg.HopsV4 {
-		parsed, err := netip.ParseAddr(ipv4)
-		if err != nil || !parsed.Is4() {
-			log.Fatalf("invalid ipv4 address: hop %d ip %s", hop, ipv4)
+
+	for _, cfg := range cfgs {
+		dest, err := netip.ParseAddr(cfg.Destination)
+		if err != nil {
+			log.Fatalf("parsing traceroute destination address: %s", err)
 		}
-		hopsV4[dest][hop] = parsed
+
+		hopsV4[dest] = make(map[int]netip.Addr)
+		for hop, ipv4 := range cfg.HopsV4 {
+			parsed, err := netip.ParseAddr(ipv4)
+			if err != nil || !parsed.Is4() {
+				log.Fatalf("invalid ipv4 address: hop %d ip %s", hop, ipv4)
+			}
+			hopsV4[dest][hop] = parsed
+		}
 	}
 
 	log.Printf("loaded hops: %v", hopsV4)
