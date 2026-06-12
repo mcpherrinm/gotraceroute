@@ -20,3 +20,13 @@ Useful for testing traceroute.
 ## Teardown
 
     ip link del tun0
+
+## Docker
+
+To be able to create the tun device, you need
+
+    docker run --cap-add=NET_ADMIN --device=/dev/net/tun:/dev/net/tun ...
+
+There's a Containerfile here which builds tracetun and includes `ip` for setup.
+
+    docker build . -t tracetun -f cmd/tracetun/Containerfile
